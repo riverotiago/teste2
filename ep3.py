@@ -109,7 +109,7 @@ class Magnetico:
         de modo a evitar a condição de fronteira, para recalcular o potencial
         em cada nodo. """
 
-        for num in range(n):
+        for num in range(1,n+1):
             if num%100 == 0:
                 print("iteração #",num)
             for i in range(1,self.n_col-1):
@@ -120,15 +120,19 @@ class Magnetico:
                         continue
 
 #CALCULOS
-problema = Magnetico(0.11, 0.06, 0.04, 0.03, 0.02, 0.015, 0.0025, 100, 0, 1)
+problema = Magnetico(0.11, 0.06, 0.04, 0.03, 0.02, 0.015, 0.005, 100, 0, 1)
 iteracoes = 2000
 last_indut = 0
 for _ in range(50):
     problema.iterarPotenciais(100)
     campoH = problema.getCampoVetorialH()
     indut = problema.calcularIndutancia()
-    print("indutancia",indut,"Delta",abs(indut-last_indut))
+    delta = abs(indut-last_indut)
+    print("indutancia",indut,"Delta",delta)
+    print("\n")
     last_indut = indut
+    if( delta == 0 ):
+        break
 
 #EQUIPOTENCIAIS
 fig, ax = plt.subplots()
@@ -150,10 +154,10 @@ cs = plt.contour(fixed,
                 levels=np.arange(problema.A_externo,problema.A_interno,11),
                 colors="black")
 #apenas para debugar, há o plot do campo
-sp = plt.streamplot(np.arange(problema.n_col-1),np.arange(problema.n_lin-1),
-                    np.array([[x[0] for x in row] for row in campoH]),
-                    np.array([[x[1] for x in row] for row in campoH])
-                     )
+#sp = plt.streamplot(np.arange(problema.n_col-1),np.arange(problema.n_lin-1),
+#                    np.array([[x[0] for x in row] for row in campoH]),
+#                    np.array([[x[1] for x in row] for row in campoH])
+#                     )
 fig.set_dpi(96)
 fig.set_size_inches(1280/96,720/96)
 #fig.savefig("ep3_potencial",dpi='figure')
