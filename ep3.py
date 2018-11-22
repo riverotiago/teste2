@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import math
 
 class Magnetico:
     def __init__(self,a,b,c,d,g,h,delta,interno,externo,mi_r):
@@ -42,7 +43,6 @@ class Magnetico:
 
     def criaBordaRetangular(self,matriz,potencial,x0,y0,x1,y1):
         ix0,ix1,iy0,iy1 = (int(x/self.delta) for x in (x0,x1,y0,y1))
-        print(ix0,ix1,iy0,iy1)
 
         for i in range(ix0,ix1+1):
             matriz[iy0][i] = str(potencial)
@@ -55,6 +55,7 @@ class Magnetico:
         return float(self.nodos[j][i])
 
     def calcularPotencialIdx(self, i, j):
+        """ Calcula o potencial na célula (i,j) por DF. """
         A1 = self.getValorIdx(i-1, j)
         A2 = self.getValorIdx(i+1, j)
         A3 = self.getValorIdx(i, j+1)
@@ -62,6 +63,7 @@ class Magnetico:
         return (A1+A2+A3+A4)/4
 
     def calcularHCelulaIdx(self, i, j):
+        """ Calcula as componentes do vetor H na célula de indice (i,j). """
         A1 = self.getValorIdx(i, j)
         A2 = self.getValorIdx(i+1, j)
         A3 = self.getValorIdx(i, j+1)
@@ -71,6 +73,7 @@ class Magnetico:
         return (Hx, Hy)
 
     def getCampoVetorialH(self):
+        """ Monta uma matriz do campo vetorial H. """
         celulas = [[None for _ in range(self.n_col-1)] for _ in range(self.n_lin-1)]
         for i in range(self.n_col-1):
             for j in range(self.n_lin-1):
@@ -79,27 +82,17 @@ class Magnetico:
 
     def calcularIndutancia(self):
         #Calcula a Corrente
-        campoH = self.getCampoVetorialH()
+        x0,y0,x1,y1 = 1, 1, len(self.nodos[0])-2, len(self.nodos)-2
 
-        #transforma coordenadas em índices matriciais
-        ix0,ix1,iy0,iy1 = (
-            int(x/self.delta) for x in (self.g,
-                                        self.g+self.c+self.delta,
-                                        self.h,
-                                        self.h+self.d+self.delta)
-        )
-
-        #Integral de H*dl
         integral = 0
-        for i in range(ix0,ix1+1):
-            integral +=  abs(campoH[iy0][i][0]) #  |Ex| borda sup
-            integral += -abs(campoH[iy1][i][0]) # -|Ex| borda inf
-        for j in range(iy0,iy1+1):
-            integral +=  abs(campoH[j][ix0][1]) #  |Ey| borda esq
-            integral += -abs(campoH[j][ix1][1]) # -|Ey| borda dir
+        for i in range(x0,x1):
+            integral += self.nodos[y0][i] #  |Ex| borda sup
+            integral += self.nodos[y1][i] # -|Ex| borda inf
+        for j in range(y0+1,y1):
+            integral += self.nodos[j][x0] #  |Ey| borda esq
+            integral += self.nodos[j][x1] # -|Ey| borda dir
 
-        corrente = integral
-        print("corrente",corrente)
+        corrente = 1/self.mi*integral/1000000 #transformar unidade
         fluxo = self.A_interno/1000000 #potencial estava em uWb/m
         indutancia = fluxo/corrente
         return indutancia
@@ -119,22 +112,40 @@ class Magnetico:
                     else:
                         continue
 
-#CALCULOS
-problema = Magnetico(0.11, 0.06, 0.04, 0.03, 0.02, 0.015, 0.005, 100, 0, 1)
-iteracoes = 2000
-last_indut = 0
-for _ in range(50):
-    problema.iterarPotenciais(100)
-    campoH = problema.getCampoVetorialH()
-    indut = problema.calcularIndutancia()
-    delta = abs(indut-last_indut)
-    print("indutancia",indut,"Delta",delta)
-    print("\n")
-    last_indut = indut
-    if( delta == 0 ):
-        break
+    def getPlotCorrenteSuperficial(self):
+        """ Armazena os pontos para o plot da Corrente Superficial
+        na Parte Inferior do Condutor Externo. """
 
-#EQUIPOTENCIAIS
+        campoH = self.getCampoVetorialH()
+        X = []
+        Y = []
+        for i in range(0,self.n_col-1):
+            #Calcula o módulo do campo H
+            modulo = math.sqrt(campoH[-1][i][0]**2+campoH[-1][i][1]**2)
+            X.append(i)
+            Y.append(modulo)
+        return X, Y
+
+#================================================================
+# CALCULOS
+#================================================================
+
+problema = Magnetico(0.11, 0.06, 0.04, 0.03, 0.02, 0.015, 0.0025, 100, 0, 1)
+iteracoes = 2000
+problema.iterarPotenciais(iteracoes)
+
+#================================================================
+# Indutância
+#================================================================
+
+campoH = problema.getCampoVetorialH()
+indut = problema.calcularIndutancia()
+print("indutancia",indut)
+
+#================================================================
+# Gráfico equipotenciais
+#================================================================
+
 fig, ax = plt.subplots()
 ax.set_title(str(iteracoes)+" Iterações")
 ax.set_xticks(np.arange(problema.n_col))
@@ -149,24 +160,25 @@ ax.set_yticklabels(
 )
 fig.tight_layout()
 fixed = [[float(x) for x in row] for row in problema.nodos]
-cs = plt.contour(fixed,
-                linewidths=0.7,
-                levels=np.arange(problema.A_externo,problema.A_interno,11),
-                colors="black")
-#apenas para debugar, há o plot do campo
-#sp = plt.streamplot(np.arange(problema.n_col-1),np.arange(problema.n_lin-1),
-#                    np.array([[x[0] for x in row] for row in campoH]),
-#                    np.array([[x[1] for x in row] for row in campoH])
-#                     )
+cs = plt.contour(fixed, linewidths=0.7, levels=np.arange(problema.A_externo,problema.A_interno,11), colors="black")
 fig.set_dpi(96)
 fig.set_size_inches(1280/96,720/96)
-#fig.savefig("ep3_potencial",dpi='figure')
 plt.show()
 
-#INDUTANCIA
+#================================================================
+# Gráfico corrente superficial na parede externa inferior
+#================================================================
 
-
-
-
-
-
+JX, JY = problema.getPlotCorrenteSuperficial()
+fig2, ax2 = plt.subplots()
+plt.plot(JX,JY)
+ax2.set_title(str(iteracoes)+" Iterações")
+ax2.set_xticks(np.arange(problema.n_col))
+ax2.set_xticklabels(
+    ( round(i,3) if k%4 == 0 else "" for k,i in
+     enumerate(np.arange(0,problema.a+problema.delta,problema.delta)) )
+)
+fig2.tight_layout()
+fig2.set_dpi(96)
+fig2.set_size_inches(1280/96,720/96)
+plt.show()
